@@ -1,0 +1,28 @@
+# 复制为 config.yaml 后填写。config.yaml 已加入 .gitignore，不会上传 Git。
+rapidapi:
+  base_url: "https://app-store-google-play-data-api.p.rapidapi.com"
+  host: "app-store-google-play-data-api.p.rapidapi.com"
+  key: "replace_with_your_rapidapi_key"
+  timeout_seconds: 20
+  request_interval_ms: 300
+  monthly_budget: 30000
+
+mysql:
+  host: "replace_with_your_mysql_host"
+  port: 3306
+  user: "appbk"
+  password: "replace_with_your_mysql_password"
+  database: "appbk"
+
+spider:
+  countries:
+    - "cn"
+    - "us"
+  collections:
+    - "topfreeapplications"
+    - "toppaidapplications"
+    - "topgrossingapplications"
+  ranking_limit: 100
+  max_retries: 4
+  log_level: "INFO"
+  log_file: "logs/app_spider.log"

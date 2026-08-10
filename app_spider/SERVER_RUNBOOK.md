@@ -42,48 +42,34 @@ mkdir -p logs
 
 ## 4. 上传配置文件
 
-本机已经生成 `app_spider/.env`，只包含 RapidAPI 和 MySQL 配置，并被 Git 忽略。可以从本机执行：
-
-```bash
-scp /Users/maris/appbk/app_spider/.env SERVER_USER@SERVER_IP:/opt/appbk/app_spider/.env
-```
-
-将 `SERVER_USER` 和 `SERVER_IP` 替换成实际服务器账号和地址。
-
-在服务器检查权限，不要打印文件内容：
+推荐使用结构清晰的 `config.yaml`。先在服务器生成：
 
 ```bash
 cd /opt/appbk/app_spider
-chmod 600 .env
-test -s .env && echo "配置文件存在"
+cp config.yaml.example config.yaml
+chmod 600 config.yaml
+nano config.yaml
+```
+
+也可以在本机准备好后上传：
+
+```bash
+scp /Users/maris/appbk/app_spider/config.yaml SERVER_USER@SERVER_IP:/opt/appbk/app_spider/config.yaml
+```
+
+将 `SERVER_USER` 和 `SERVER_IP` 替换成实际服务器账号和地址。在服务器检查权限，不要打印文件内容：
+
+```bash
+cd /opt/appbk/app_spider
+chmod 600 config.yaml
+test -s config.yaml && echo "配置文件存在"
 ```
 
 配置文件需要这些字段：
 
-```dotenv
-RAPIDAPI_KEY=你的_RapidAPI_Key
-RAPIDAPI_HOST=app-store-google-play-data-api.p.rapidapi.com
-MYSQL_HOST=你的_MySQL_地址
-MYSQL_PORT=3306
-MYSQL_USER=appbk
-MYSQL_PASSWORD=你的_MySQL_密码
-MYSQL_DATABASE=appbk
-```
+YAML 的完整格式见仓库中的 `config.yaml.example`，包括 RapidAPI、MySQL 和采集参数三个分组。
 
-可选采集参数可以直接使用默认值，也可以追加：
-
-```dotenv
-SPIDER_COUNTRIES=cn,us
-SPIDER_COLLECTIONS=topfreeapplications,toppaidapplications,topgrossingapplications
-SPIDER_RANKING_LIMIT=100
-SPIDER_MAX_RETRIES=4
-SPIDER_LOG_LEVEL=INFO
-SPIDER_LOG_FILE=logs/app_spider.log
-RAPIDAPI_REQUEST_INTERVAL_MS=300
-RAPIDAPI_MONTHLY_BUDGET=30000
-```
-
-不要把 `.env` 添加到 Git，也不要在日志或截图中展示其内容。
+不要把 `config.yaml` 添加到 Git，也不要在日志或截图中展示其内容。环境变量可覆盖 YAML 配置，适合以后通过 Docker 或 CI 注入密码。
 
 ## 5. 首次测试
 
@@ -170,7 +156,7 @@ cd app_spider
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-`.env` 不受 Git 更新影响。
+`config.yaml` 不受 Git 更新影响。
 
 ## 9. 常见问题
 

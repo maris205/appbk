@@ -9,10 +9,10 @@ cd app_spider
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+cp config.yaml.example config.yaml
 ```
 
-编辑 `.env` 填写 RapidAPI 和 MySQL 配置。`.env` 已被忽略，不会上传 Git。
+编辑 `config.yaml` 填写 RapidAPI 和 MySQL 配置。`config.yaml` 已被忽略，不会上传 Git。环境变量仍可覆盖 YAML 中的同名配置。
 
 ## 使用
 
@@ -43,4 +43,3 @@ python -m app_spider run-daily
 - App 与榜单快照在同一个 MySQL 事务中写入。
 - 上游响应保存在 `app_snapshots.raw_json`，便于后续补充字段。
 - 不读取或修改用户、登录 Session 和 Agent 洞察数据。
-

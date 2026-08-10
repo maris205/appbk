@@ -2,8 +2,38 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
+import yaml
+
+
+def _read_yaml() -> dict[str, Any]:
+    path = Path(os.getenv("APP_SPIDER_CONFIG", "config.yaml"))
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"配置文件 {path} 的根节点必须是对象")
+    return data
+
+
+def _section(config: dict[str, Any], name: str) -> dict[str, Any]:
+    value = config.get(name, {})
+    if not isinstance(value, dict):
+        raise ValueError(f"配置项 {name} 必须是对象")
+    return value
+
+
+def _value(env_name: str, section: dict[str, Any], yaml_name: str, default: Any = "") -> Any:
+    return os.getenv(env_name, section.get(yaml_name, default))
+
+
+def _tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, list):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return tuple(part.strip() for part in str(value).split(",") if part.strip())
 
 
 @dataclass(frozen=True)
@@ -28,30 +58,39 @@ class Settings:
 
     @classmethod
     def load(cls, require_mysql: bool = True) -> "Settings":
-        load_dotenv()
-        required = ["RAPIDAPI_KEY"]
-        if require_mysql:
-            required += ["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"]
-        missing = [name for name in required if not os.getenv(name)]
+        config = _read_yaml()
+        if not config:
+            load_dotenv()
+        rapidapi = _section(config, "rapidapi")
+        mysql = _section(config, "mysql")
+        spider = _section(config, "spider")
+        values = {
+            "RAPIDAPI_KEY": _value("RAPIDAPI_KEY", rapidapi, "key"),
+            "MYSQL_HOST": _value("MYSQL_HOST", mysql, "host"),
+            "MYSQL_USER": _value("MYSQL_USER", mysql, "user"),
+            "MYSQL_PASSWORD": _value("MYSQL_PASSWORD", mysql, "password"),
+            "MYSQL_DATABASE": _value("MYSQL_DATABASE", mysql, "database"),
+        }
+        required = ["RAPIDAPI_KEY"] + (["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"] if require_mysql else [])
+        missing = [name for name in required if not values[name]]
         if missing:
             raise ValueError("缺少配置：" + ", ".join(missing))
         return cls(
-            rapidapi_base_url=os.getenv("RAPIDAPI_BASE_URL", "https://app-store-google-play-data-api.p.rapidapi.com").rstrip("/"),
-            rapidapi_host=os.getenv("RAPIDAPI_HOST", "app-store-google-play-data-api.p.rapidapi.com"),
-            rapidapi_key=os.getenv("RAPIDAPI_KEY", ""),
-            timeout_seconds=float(os.getenv("RAPIDAPI_TIMEOUT_SECONDS", "20")),
-            request_interval_ms=int(os.getenv("RAPIDAPI_REQUEST_INTERVAL_MS", "300")),
-            monthly_budget=int(os.getenv("RAPIDAPI_MONTHLY_BUDGET", "30000")),
-            mysql_host=os.getenv("MYSQL_HOST", ""),
-            mysql_port=int(os.getenv("MYSQL_PORT", "3306")),
-            mysql_user=os.getenv("MYSQL_USER", ""),
-            mysql_password=os.getenv("MYSQL_PASSWORD", ""),
-            mysql_database=os.getenv("MYSQL_DATABASE", "appbk"),
-            countries=tuple(filter(None, os.getenv("SPIDER_COUNTRIES", "cn,us").split(","))),
-            collections=tuple(filter(None, os.getenv("SPIDER_COLLECTIONS", "topfreeapplications,toppaidapplications,topgrossingapplications").split(","))),
-            ranking_limit=min(max(int(os.getenv("SPIDER_RANKING_LIMIT", "100")), 1), 100),
-            max_retries=max(int(os.getenv("SPIDER_MAX_RETRIES", "4")), 1),
-            log_level=os.getenv("SPIDER_LOG_LEVEL", "INFO").upper(),
-            log_file=os.getenv("SPIDER_LOG_FILE", "logs/app_spider.log"),
+            rapidapi_base_url=str(_value("RAPIDAPI_BASE_URL", rapidapi, "base_url", "https://app-store-google-play-data-api.p.rapidapi.com")).rstrip("/"),
+            rapidapi_host=str(_value("RAPIDAPI_HOST", rapidapi, "host", "app-store-google-play-data-api.p.rapidapi.com")),
+            rapidapi_key=str(values["RAPIDAPI_KEY"]),
+            timeout_seconds=float(_value("RAPIDAPI_TIMEOUT_SECONDS", rapidapi, "timeout_seconds", 20)),
+            request_interval_ms=int(_value("RAPIDAPI_REQUEST_INTERVAL_MS", rapidapi, "request_interval_ms", 300)),
+            monthly_budget=int(_value("RAPIDAPI_MONTHLY_BUDGET", rapidapi, "monthly_budget", 30000)),
+            mysql_host=str(values["MYSQL_HOST"]),
+            mysql_port=int(_value("MYSQL_PORT", mysql, "port", 3306)),
+            mysql_user=str(values["MYSQL_USER"]),
+            mysql_password=str(values["MYSQL_PASSWORD"]),
+            mysql_database=str(values["MYSQL_DATABASE"] or "appbk"),
+            countries=_tuple(_value("SPIDER_COUNTRIES", spider, "countries", ["cn", "us"])),
+            collections=_tuple(_value("SPIDER_COLLECTIONS", spider, "collections", ["topfreeapplications", "toppaidapplications", "topgrossingapplications"])),
+            ranking_limit=min(max(int(_value("SPIDER_RANKING_LIMIT", spider, "ranking_limit", 100)), 1), 100),
+            max_retries=max(int(_value("SPIDER_MAX_RETRIES", spider, "max_retries", 4)), 1),
+            log_level=str(_value("SPIDER_LOG_LEVEL", spider, "log_level", "INFO")).upper(),
+            log_file=str(_value("SPIDER_LOG_FILE", spider, "log_file", "logs/app_spider.log")),
         )
-

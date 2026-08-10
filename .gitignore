@@ -10,6 +10,7 @@ prisma/*.db
 prisma/*.db-*
 
 # dependencies and build output
+.DS_Store
 /node_modules
 /node_modules.incomplete
 /.next/
