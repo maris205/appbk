@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type AppResult = {
   id: string;
@@ -170,7 +172,8 @@ function AuthDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u
   );
 }
 
-type ChatMessage = { role: "user" | "assistant"; content: string; tools?: string[] };
+type ChatMessage = { id?:number; role: "user" | "assistant"; content: string; tools?: string[]; createdAt?:number };
+type ChatConversation = { id:number; title:string; agent:AgentType; country:string; createdAt:number; updatedAt:number };
 type AgentType = "general" | "launch" | "aso" | "apple_ads";
 const agents: Record<AgentType, { name:string; short:string; description:string; greeting:string; suggestions:string[] }> = {
   general:{ name:"appbk Agent", short:"A", description:"App 产品与增长决策", greeting:"今天想分析什么？", suggestions:["分析一下中国区效率工具的产品机会","一个新 App 应该怎样验证关键词？","帮我设计一个 App 增长周报框架"] },
@@ -186,7 +189,39 @@ function LoggedInChat({ user, country, initialPrompt, onCountryChange, onLogout 
   const [chatError, setChatError] = useState("");
   const [activeAgent, setActiveAgent] = useState<AgentType>("general");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [conversationId, setConversationId] = useState<number|null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const initialSent = useRef(false);
+  const threadRef = useRef<HTMLDivElement|null>(null);
+
+  async function refreshConversations() {
+    try {
+      const response = await fetch("/api/v1/chats");
+      const payload = await response.json();
+      if (response.ok) setConversations(payload.data || []);
+    } catch { /* 聊天仍可使用，历史列表稍后重试 */ }
+  }
+
+  async function openConversation(id:number) {
+    if (sending) return;
+    setHistoryLoading(true); setChatError("");
+    try {
+      const response = await fetch(`/api/v1/chats/${id}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "聊天记录加载失败");
+      const conversation = payload.data.conversation as ChatConversation;
+      setConversationId(conversation.id);
+      setMessages(payload.data.messages || []);
+      if (agents[conversation.agent]) setActiveAgent(conversation.agent);
+      if (["cn","us","jp"].includes(conversation.country)) onCountryChange(conversation.country);
+    } catch (cause) { setChatError(cause instanceof Error?cause.message:"聊天记录加载失败"); }
+    finally { setHistoryLoading(false); }
+  }
+
+  function newConversation(agent:AgentType="general") {
+    setConversationId(null); setMessages([]); setChatError(""); setActiveAgent(agent);
+  }
 
   async function sendMessage(contentInput?: string) {
     const content = (contentInput ?? input).trim();
@@ -194,10 +229,12 @@ function LoggedInChat({ user, country, initialPrompt, onCountryChange, onLogout 
     const nextMessages = [...messages, { role:"user" as const, content }];
     setMessages(nextMessages); setInput(""); setSending(true); setChatError("");
     try {
-      const response = await fetch("/api/v1/chat", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ country, agent:activeAgent, messages:nextMessages }) });
+      const response = await fetch("/api/v1/chat", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ country, agent:activeAgent, conversationId, messages:nextMessages }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || "Agent 暂时不可用");
       setMessages([...nextMessages, { ...payload.data.message, tools: payload.data.tools || [] }]);
+      setConversationId(payload.data.conversation.id);
+      await refreshConversations();
     } catch (cause) { setChatError(cause instanceof Error ? cause.message : "Agent 暂时不可用"); }
     finally { setSending(false); }
   }
@@ -209,7 +246,16 @@ function LoggedInChat({ user, country, initialPrompt, onCountryChange, onLogout 
   useEffect(() => {
     const savedCountry = window.localStorage.getItem("appbk_default_country");
     if (savedCountry && ["cn","us","jp"].includes(savedCountry)) onCountryChange(savedCountry);
+    void refreshConversations();
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const thread = threadRef.current;
+      if (thread) thread.scrollTo({ top:thread.scrollHeight, behavior:"smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, sending]);
 
   function changeCountry(value:string) {
     onCountryChange(value);
@@ -219,14 +265,14 @@ function LoggedInChat({ user, country, initialPrompt, onCountryChange, onLogout 
   return <main className="chat-page">
     <header className="topbar app-header"><a className="brand" href="/"><img src="/appbk-logo.png" alt="appbk"/><span>appbk</span></a><nav><a href="/rankings">数据大盘</a><a className="active" href="/">Agent</a></nav><div className="top-actions"><select className="chat-country" value={country} onChange={(event)=>changeCountry(event.target.value)}><option value="cn">中国区</option><option value="us">美国区</option><option value="jp">日本区</option></select></div></header>
     <section className="chat-shell">
-      <aside className="chat-sidebar"><button type="button" onClick={()=>{setMessages([]);setChatError("");setActiveAgent("general")}}>＋ 新对话</button><div><span>今天</span><p className="active">App 增长分析</p></div><div className="specialists"><span>专业 Agent</span>{(["launch","aso","apple_ads"] as AgentType[]).map((key)=><button className={activeAgent===key?"active":""} type="button" key={key} onClick={()=>{setActiveAgent(key);setMessages([]);setChatError("")}}><b>{agents[key].short}</b><i><strong>{agents[key].name}</strong><small>{agents[key].description}</small></i><em>›</em></button>)}</div><div className="sidebar-account"><a href="/rankings">▦ 数据大盘</a><button type="button" onClick={()=>setSettingsOpen(true)}><span>{user.email.slice(0,1).toUpperCase()}</span><i><strong>{user.email}</strong><small>账户与设置</small></i><em>···</em></button></div></aside>
-      <div className="chat-main"><div className="chat-thread">
+      <aside className="chat-sidebar"><button type="button" onClick={()=>newConversation()}>＋ 新对话</button><div className="conversation-list"><span>聊天记录</span>{historyLoading&&<small>正在加载…</small>}{!historyLoading&&conversations.length===0&&<small>还没有历史对话</small>}{conversations.map((conversation)=><button type="button" className={conversationId===conversation.id?"active":""} key={conversation.id} onClick={()=>void openConversation(conversation.id)}><strong>{conversation.title}</strong><small>{agents[conversation.agent]?.name||"appbk Agent"} · {conversation.country.toUpperCase()}</small></button>)}</div><div className="specialists"><span>专业 Agent</span>{(["launch","aso","apple_ads"] as AgentType[]).map((key)=><button className={activeAgent===key&&!conversationId?"active":""} type="button" key={key} onClick={()=>newConversation(key)}><b>{agents[key].short}</b><i><strong>{agents[key].name}</strong><small>{agents[key].description}</small></i><em>›</em></button>)}</div><div className="sidebar-account"><a href="/rankings">▦ 数据大盘</a><button type="button" onClick={()=>setSettingsOpen(true)}><span>{user.email.slice(0,1).toUpperCase()}</span><i><strong>{user.email}</strong><small>账户与设置</small></i><em>···</em></button></div></aside>
+      <div className="chat-main"><div className="chat-thread" ref={threadRef}>
         {messages.length===0&&<div className="chat-welcome"><div className="agent-orb">{agents[activeAgent].short}</div><div className="agent-type-label">{agents[activeAgent].name}</div><h1>{agents[activeAgent].greeting}</h1><p>{agents[activeAgent].description}，回答会优先使用该领域的专业工作流。</p><div className="chat-suggestions">{agents[activeAgent].suggestions.map((suggestion)=><button key={suggestion} onClick={()=>sendMessage(suggestion)}>{suggestion}</button>)}</div></div>}
-        {messages.map((message,index)=><article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>{message.role==="assistant"&&<div className="message-avatar">{agents[activeAgent].short}</div>}<div><span>{message.role==="user"?"你":agents[activeAgent].name}</span>{message.tools&&message.tools.length>0&&<small className="message-data-source">● 已查询 appbk 实时数据库</small>}<p>{message.content}</p></div></article>)}
+        {messages.map((message,index)=><article className={`chat-message ${message.role}`} key={message.id||`${message.role}-${index}`}>{message.role==="assistant"&&<div className="message-avatar">{agents[activeAgent].short}</div>}<div><span>{message.role==="user"?"你":agents[activeAgent].name}</span>{message.tools&&message.tools.length>0&&<small className="message-data-source">● 已查询 appbk 实时数据库</small>}{message.role==="assistant"?<div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown></div>:<p>{message.content}</p>}</div></article>)}
         {sending&&<article className="chat-message assistant"><div className="message-avatar">{agents[activeAgent].short}</div><div><span>{agents[activeAgent].name}</span><p className="thinking">正在分析<span>···</span></p></div></article>}
         {chatError&&<div className="chat-error">{chatError}<button onClick={()=>sendMessage(messages.at(-1)?.role==="user"?messages.at(-1)?.content:undefined)}>重试</button></div>}
       </div><form className="chat-composer" onSubmit={(event)=>{event.preventDefault();void sendMessage()}}><textarea value={input} onChange={(event)=>setInput(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void sendMessage()}}} placeholder="给 appbk Agent 发消息…" rows={1}/><button type="submit" disabled={sending||!input.trim()}>↑</button><small>默认分析 {country==="cn"?"中国区":country==="us"?"美国区":"日本区"} · AI 可能出错，重要决策请核验数据</small></form></div>
     </section>
-    {settingsOpen&&<div className="auth-overlay" onMouseDown={(event)=>{if(event.target===event.currentTarget)setSettingsOpen(false)}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button className="auth-close" type="button" onClick={()=>setSettingsOpen(false)} aria-label="关闭">×</button><div className="settings-heading"><span>{user.email.slice(0,1).toUpperCase()}</span><div><h2 id="settings-title">账户设置</h2><p>{user.email}</p></div></div><div className="setting-row"><div><strong>默认市场</strong><small>用于新对话和专业 Agent 分析</small></div><select value={country} onChange={(event)=>changeCountry(event.target.value)}><option value="cn">中国区</option><option value="us">美国区</option><option value="jp">日本区</option></select></div><div className="setting-row"><div><strong>当前对话</strong><small>清除本次浏览器中的聊天内容</small></div><button type="button" onClick={()=>{setMessages([]);setChatError("");setSettingsOpen(false)}}>清空对话</button></div><div className="settings-note">MVP1 暂时只保存市场偏好，聊天记录还没有同步到数据库。</div><button className="settings-logout" type="button" onClick={onLogout}>退出登录</button></section></div>}
+    {settingsOpen&&<div className="auth-overlay" onMouseDown={(event)=>{if(event.target===event.currentTarget)setSettingsOpen(false)}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button className="auth-close" type="button" onClick={()=>setSettingsOpen(false)} aria-label="关闭">×</button><div className="settings-heading"><span>{user.email.slice(0,1).toUpperCase()}</span><div><h2 id="settings-title">账户设置</h2><p>{user.email}</p></div></div><div className="setting-row"><div><strong>默认市场</strong><small>用于新对话和专业 Agent 分析</small></div><select value={country} onChange={(event)=>changeCountry(event.target.value)}><option value="cn">中国区</option><option value="us">美国区</option><option value="jp">日本区</option></select></div><div className="setting-row"><div><strong>当前对话</strong><small>保留历史记录并开始一段新对话</small></div><button type="button" onClick={()=>{newConversation(activeAgent);setSettingsOpen(false)}}>新对话</button></div><div className="settings-note">聊天记录已同步到数据库；连续对话会使用最近 20 条消息作为上下文。</div><button className="settings-logout" type="button" onClick={onLogout}>退出登录</button></section></div>}
   </main>;
 }

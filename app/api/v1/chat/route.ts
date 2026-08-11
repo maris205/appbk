@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appDataTools, executeAppDataTool } from "../../../../lib/app-data-tools";
 import { getUserFromToken, readSessionCookie } from "../../../../lib/auth";
+import { addMessage, createConversation, getConversation, listMessages } from "../../../../lib/chat-history";
 
 type InputMessage = { role: "user" | "assistant"; content: string };
 type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
@@ -33,13 +34,28 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ data: null, error: { message: "请先登录后再使用 Agent" } }, { status: 401 });
   try {
     const body = await request.json();
-    const country = new Set(["cn", "us", "jp"]).has(body.country) ? body.country : "cn";
-    const agent = typeof body.agent === "string" && agentInstructions[body.agent] ? body.agent : "general";
+    let country = new Set(["cn", "us", "jp"]).has(body.country) ? body.country : "cn";
+    let agent = typeof body.agent === "string" && agentInstructions[body.agent] ? body.agent : "general";
     const input: InputMessage[] = Array.isArray(body.messages) ? body.messages : [];
-    const history = input.slice(-20)
+    const validInput = input.slice(-20)
       .filter((message) => (message.role === "user" || message.role === "assistant") && typeof message.content === "string" && message.content.trim())
       .map((message) => ({ role: message.role, content: message.content.trim().slice(0, 4000) }));
-    if (!history.length) return NextResponse.json({ data: null, error: { message: "请输入问题" } }, { status: 400 });
+    const currentInput = [...validInput].reverse().find((message) => message.role === "user")?.content;
+    if (!currentInput) return NextResponse.json({ data: null, error: { message: "请输入问题" } }, { status: 400 });
+
+    const requestedConversationId = Number(body.conversationId);
+    let conversation = Number.isSafeInteger(requestedConversationId) && requestedConversationId > 0 ? await getConversation(user.id, requestedConversationId) : null;
+    if (requestedConversationId && !conversation) return NextResponse.json({ data:null, error:{ message:"对话不存在或无权访问" } }, { status:404 });
+    if (!conversation) conversation = await createConversation(user.id, currentInput.replace(/\s+/g," ").slice(0,36), agent, country);
+    else { agent = agentInstructions[conversation.agent] ? conversation.agent : agent; country = new Set(["cn","us","jp"]).has(conversation.country) ? conversation.country : country; }
+
+    let storedMessages = await listMessages(conversation.id, 20);
+    const latest = storedMessages.at(-1);
+    if (!(latest?.role === "user" && latest.content === currentInput)) {
+      await addMessage(conversation.id, "user", currentInput);
+      storedMessages = await listMessages(conversation.id, 20);
+    }
+    const history = storedMessages.map((message) => ({ role:message.role, content:message.content }));
 
     const apiKey = process.env.AI_API_KEY;
     const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
@@ -91,7 +107,9 @@ export async function POST(request: Request) {
       finalContent = typeof message.content === "string" ? message.content.trim() : "";
     }
     if (!finalContent) throw new Error("Agent 没有生成最终回答");
-    return NextResponse.json({ data: { message: { role: "assistant", content: finalContent }, model, agent, tools: [...new Set(usedTools)], user: { id: user.id, email: user.email } }, error: null });
+    const uniqueTools = [...new Set(usedTools)];
+    const savedMessage = await addMessage(conversation.id, "assistant", finalContent, uniqueTools);
+    return NextResponse.json({ data: { message: { role: "assistant", content: finalContent, id:savedMessage.id, createdAt:savedMessage.createdAt }, conversation, model, agent, tools:uniqueTools, user: { id: user.id, email: user.email } }, error: null });
   } catch (error) {
     return NextResponse.json({ data: null, error: { message: error instanceof Error ? error.message : "Agent 暂时不可用" } }, { status: 502 });
   }
