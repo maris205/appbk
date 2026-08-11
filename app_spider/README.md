@@ -9,10 +9,10 @@ cd app_spider
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp config.yaml.example config.yaml
+cp ../config.yaml.example ../config.yaml
 ```
 
-编辑 `config.yaml` 填写 RapidAPI 和 MySQL 配置。`config.yaml` 已被忽略，不会上传 Git。环境变量仍可覆盖 YAML 中的同名配置。
+编辑项目根目录的 `config.yaml`，填写 RapidAPI、MySQL 和 AI 配置。Web 与爬虫共用该文件，文件已被忽略，不会上传 Git。`APPBK_CONFIG` 或环境变量仍可覆盖默认位置和 YAML 配置。
 
 ## 使用
 

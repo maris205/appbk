@@ -10,8 +10,10 @@ import yaml
 
 
 def _read_yaml() -> dict[str, Any]:
-    path = Path(os.getenv("APP_SPIDER_CONFIG", "config.yaml"))
-    if not path.exists():
+    explicit = os.getenv("APP_SPIDER_CONFIG") or os.getenv("APPBK_CONFIG")
+    candidates = [Path(explicit)] if explicit else [Path("../config.yaml"), Path("config.yaml")]
+    path = next((candidate for candidate in candidates if candidate.exists()), None)
+    if path is None:
         return {}
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):

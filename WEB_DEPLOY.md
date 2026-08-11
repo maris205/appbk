@@ -33,30 +33,31 @@ node -v
 npm -v
 ```
 
-## 3. 上传 Web 配置
+## 3. 上传统一配置
 
 在本机 Mac 执行：
 
 ```bash
-scp /Users/maris/appbk/.env.local \
-  SERVER_USER@SERVER_IP:/opt/appbk/.env.local
+scp /Users/maris/appbk/config.yaml \
+  SERVER_USER@SERVER_IP:/opt/appbk/config.yaml
 ```
 
 服务器设置权限：
 
 ```bash
 cd /opt/appbk
-chmod 600 .env.local
-test -s .env.local && echo "Web 配置存在"
+chmod 600 config.yaml
+test -s config.yaml && echo "统一配置存在"
 ```
 
-`.env.local` 应包含：
+`config.yaml` 包含四个分组：
 
-- `RAPIDAPI_KEY`、`RAPIDAPI_HOST`
-- `AI_API_KEY`、`AI_BASE_URL`、`AI_MODEL`
-- `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`
+- `rapidapi`：RapidAPI 地址、Key、限速与额度
+- `mysql`：数据库地址、端口、账号、密码和数据库名
+- `ai`：大模型 Key、OpenAI 兼容地址和模型名
+- `spider`：采集国家、榜单、数量和日志
 
-该文件已被 Git 忽略，禁止提交或打印其内容。正式上线前应更换曾经公开过的测试 Key 和数据库密码。
+Web 与爬虫读取同一份根目录配置。该文件已被 Git 忽略，禁止提交或打印其内容。正式上线前应更换曾经公开过的测试 Key 和数据库密码。
 
 ## 4. 安装、构建和试运行
 
@@ -196,7 +197,7 @@ sudo systemctl restart appbk-web
 sudo systemctl status appbk-web --no-pager
 ```
 
-`git pull` 不会覆盖 `.env.local` 和 `app_spider/config.yaml`。
+`git pull` 不会覆盖根目录的 `config.yaml`。
 
 ## 9. 最终检查
 

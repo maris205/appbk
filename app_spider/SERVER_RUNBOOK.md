@@ -42,10 +42,10 @@ mkdir -p logs
 
 ## 4. 上传配置文件
 
-推荐使用结构清晰的 `config.yaml`。先在服务器生成：
+Web 与爬虫统一使用项目根目录 `/opt/appbk/config.yaml`。先在服务器生成：
 
 ```bash
-cd /opt/appbk/app_spider
+cd /opt/appbk
 cp config.yaml.example config.yaml
 chmod 600 config.yaml
 nano config.yaml
@@ -54,20 +54,20 @@ nano config.yaml
 也可以在本机准备好后上传：
 
 ```bash
-scp /Users/maris/appbk/app_spider/config.yaml SERVER_USER@SERVER_IP:/opt/appbk/app_spider/config.yaml
+scp /Users/maris/appbk/config.yaml SERVER_USER@SERVER_IP:/opt/appbk/config.yaml
 ```
 
 将 `SERVER_USER` 和 `SERVER_IP` 替换成实际服务器账号和地址。在服务器检查权限，不要打印文件内容：
 
 ```bash
-cd /opt/appbk/app_spider
+cd /opt/appbk
 chmod 600 config.yaml
 test -s config.yaml && echo "配置文件存在"
 ```
 
 配置文件需要这些字段：
 
-YAML 的完整格式见仓库中的 `config.yaml.example`，包括 RapidAPI、MySQL 和采集参数三个分组。
+YAML 的完整格式见项目根目录的 `config.yaml.example`，包括 RapidAPI、MySQL、AI 和采集参数四个分组。
 
 不要把 `config.yaml` 添加到 Git，也不要在日志或截图中展示其内容。环境变量可覆盖 YAML 配置，适合以后通过 Docker 或 CI 注入密码。
 

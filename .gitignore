@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+config.yaml
 
 # Local SQLite database and temporary files.
 data/*.db
