@@ -170,7 +170,7 @@ function AuthDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u
   );
 }
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+type ChatMessage = { role: "user" | "assistant"; content: string; tools?: string[] };
 type AgentType = "general" | "launch" | "aso" | "apple_ads";
 const agents: Record<AgentType, { name:string; short:string; description:string; greeting:string; suggestions:string[] }> = {
   general:{ name:"appbk Agent", short:"A", description:"App 产品与增长决策", greeting:"今天想分析什么？", suggestions:["分析一下中国区效率工具的产品机会","一个新 App 应该怎样验证关键词？","帮我设计一个 App 增长周报框架"] },
@@ -197,7 +197,7 @@ function LoggedInChat({ user, country, initialPrompt, onCountryChange, onLogout 
       const response = await fetch("/api/v1/chat", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ country, agent:activeAgent, messages:nextMessages }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || "Agent 暂时不可用");
-      setMessages([...nextMessages, payload.data.message]);
+      setMessages([...nextMessages, { ...payload.data.message, tools: payload.data.tools || [] }]);
     } catch (cause) { setChatError(cause instanceof Error ? cause.message : "Agent 暂时不可用"); }
     finally { setSending(false); }
   }
@@ -222,7 +222,7 @@ function LoggedInChat({ user, country, initialPrompt, onCountryChange, onLogout 
       <aside className="chat-sidebar"><button type="button" onClick={()=>{setMessages([]);setChatError("");setActiveAgent("general")}}>＋ 新对话</button><div><span>今天</span><p className="active">App 增长分析</p></div><div className="specialists"><span>专业 Agent</span>{(["launch","aso","apple_ads"] as AgentType[]).map((key)=><button className={activeAgent===key?"active":""} type="button" key={key} onClick={()=>{setActiveAgent(key);setMessages([]);setChatError("")}}><b>{agents[key].short}</b><i><strong>{agents[key].name}</strong><small>{agents[key].description}</small></i><em>›</em></button>)}</div><div className="sidebar-account"><a href="/rankings">▦ 数据大盘</a><button type="button" onClick={()=>setSettingsOpen(true)}><span>{user.email.slice(0,1).toUpperCase()}</span><i><strong>{user.email}</strong><small>账户与设置</small></i><em>···</em></button></div></aside>
       <div className="chat-main"><div className="chat-thread">
         {messages.length===0&&<div className="chat-welcome"><div className="agent-orb">{agents[activeAgent].short}</div><div className="agent-type-label">{agents[activeAgent].name}</div><h1>{agents[activeAgent].greeting}</h1><p>{agents[activeAgent].description}，回答会优先使用该领域的专业工作流。</p><div className="chat-suggestions">{agents[activeAgent].suggestions.map((suggestion)=><button key={suggestion} onClick={()=>sendMessage(suggestion)}>{suggestion}</button>)}</div></div>}
-        {messages.map((message,index)=><article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>{message.role==="assistant"&&<div className="message-avatar">{agents[activeAgent].short}</div>}<div><span>{message.role==="user"?"你":agents[activeAgent].name}</span><p>{message.content}</p></div></article>)}
+        {messages.map((message,index)=><article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>{message.role==="assistant"&&<div className="message-avatar">{agents[activeAgent].short}</div>}<div><span>{message.role==="user"?"你":agents[activeAgent].name}</span>{message.tools&&message.tools.length>0&&<small className="message-data-source">● 已查询 appbk 实时数据库</small>}<p>{message.content}</p></div></article>)}
         {sending&&<article className="chat-message assistant"><div className="message-avatar">{agents[activeAgent].short}</div><div><span>{agents[activeAgent].name}</span><p className="thinking">正在分析<span>···</span></p></div></article>}
         {chatError&&<div className="chat-error">{chatError}<button onClick={()=>sendMessage(messages.at(-1)?.role==="user"?messages.at(-1)?.content:undefined)}>重试</button></div>}
       </div><form className="chat-composer" onSubmit={(event)=>{event.preventDefault();void sendMessage()}}><textarea value={input} onChange={(event)=>setInput(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void sendMessage()}}} placeholder="给 appbk Agent 发消息…" rows={1}/><button type="submit" disabled={sending||!input.trim()}>↑</button><small>默认分析 {country==="cn"?"中国区":country==="us"?"美国区":"日本区"} · AI 可能出错，重要决策请核验数据</small></form></div>
