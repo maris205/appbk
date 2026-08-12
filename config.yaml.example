@@ -23,11 +23,21 @@ spider:
   countries:
     - "cn"
     - "us"
+    - "jp"
   collections:
     - "topfreeapplications"
     - "toppaidapplications"
     - "topgrossingapplications"
   ranking_limit: 100
+  category_rankings_enabled: true
+  app_detail_ttl_hours: 24
+  review_ttl_hours: 24
+  review_top_n: 20
+  review_limit: 100
+  daily_request_limit: 800
+  monthly_request_limit: 24000
+  budget_non_core_ratio: 0.9
+  usage_file: "logs/rapidapi_usage.json"
   max_retries: 4
   log_level: "INFO"
   log_file: "logs/app_spider.log"

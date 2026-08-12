@@ -1,6 +1,7 @@
 .env
 config.yaml
 .venv/
+logs/
 __pycache__/
 *.py[cod]
 .pytest_cache/

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS apps (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   apple_id VARCHAR(32) NOT NULL,
+  bundle_id VARCHAR(255),
   name VARCHAR(512) NOT NULL,
   developer VARCHAR(512),
   icon_url TEXT,
@@ -42,11 +43,36 @@ CREATE TABLE IF NOT EXISTS app_snapshots (
   price DECIMAL(12,4),
   rating DECIMAL(8,5),
   rating_count BIGINT,
+  description LONGTEXT,
+  release_notes LONGTEXT,
+  genres_json TEXT,
+  primary_genre VARCHAR(255),
+  currency VARCHAR(16),
+  content_rating VARCHAR(32),
+  minimum_os_version VARCHAR(64),
+  file_size_bytes BIGINT,
+  release_date BIGINT,
+  current_version_release_date BIGINT,
+  screenshots_json LONGTEXT,
+  store_url TEXT,
   raw_json LONGTEXT,
   fetched_at BIGINT NOT NULL,
   PRIMARY KEY (id),
   KEY idx_app_snapshots_app_country_time (app_id, country, fetched_at),
   CONSTRAINT fk_app_snapshots_app FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS app_categories (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  country VARCHAR(8) NOT NULL,
+  category_id VARCHAR(64) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  parent_id VARCHAR(64),
+  raw_json LONGTEXT,
+  fetched_at BIGINT NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_app_categories_country_category (country, category_id),
+  KEY idx_app_categories_country_parent (country, parent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS ranking_snapshots (
@@ -77,6 +103,14 @@ CREATE TABLE IF NOT EXISTS reviews (
   UNIQUE KEY idx_reviews_provider_country (provider_id, country),
   KEY idx_reviews_app_country_time (app_id, country, published_at),
   CONSTRAINT fk_reviews_app FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS review_sync_state (
+  app_id BIGINT UNSIGNED NOT NULL,
+  country VARCHAR(8) NOT NULL,
+  fetched_at BIGINT NOT NULL,
+  PRIMARY KEY (app_id, country),
+  CONSTRAINT fk_review_sync_app FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS keywords (

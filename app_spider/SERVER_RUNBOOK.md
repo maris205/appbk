@@ -103,13 +103,27 @@ cd /opt/appbk/app_spider
 
 预期 `written` 为 10。若连接 MySQL 失败，先检查 RDS 白名单、安全组、账号权限和 3306 端口。
 
+验证 V2 分类、详情和评论：
+
+```bash
+.venv/bin/python -m app_spider sync-categories --country cn --dry-run
+.venv/bin/python -m app_spider app-detail --app-id 414478124 --country cn --dry-run
+.venv/bin/python -m app_spider reviews --app-id 414478124 --country cn --limit 10 --dry-run
+```
+
 ## 6. 正式手动运行
 
-采集 `.env` 中配置的全部国家和榜单：
+采集统一配置中的全部国家总榜：
 
 ```bash
 cd /opt/appbk/app_spider
 .venv/bin/python -m app_spider run-daily
+```
+
+每日公共数据任务包含分类、分类榜、详情 TTL 和优先评论：
+
+```bash
+.venv/bin/python -m app_spider run-public-daily
 ```
 
 查看最近日志：
@@ -126,11 +140,12 @@ tail -n 100 /opt/appbk/app_spider/logs/app_spider.log
 crontab -e
 ```
 
-每天北京时间 02:10、08:10、14:10、20:10 执行：
+总榜每 6 小时执行，每日 03:40 执行完整公共数据任务：
 
 ```cron
 CRON_TZ=Asia/Shanghai
-10 2,8,14,20 * * * cd /opt/appbk/app_spider && /usr/bin/flock -n /tmp/app_spider_daily.lock .venv/bin/python -m app_spider run-daily >> logs/cron.log 2>&1
+10 2,8,14,20 * * * cd /opt/appbk/app_spider && /usr/bin/flock -n /tmp/app_spider_rankings.lock .venv/bin/python -m app_spider run-daily >> logs/cron.log 2>&1
+40 3 * * * cd /opt/appbk/app_spider && /usr/bin/flock -n /tmp/app_spider_public.lock .venv/bin/python -m app_spider run-public-daily >> logs/cron.log 2>&1
 ```
 
 `flock` 会防止上一轮没有结束时重复启动。首次建议只设置每天一次，观察 API 用量和数据库增长后再改成每天四次。
